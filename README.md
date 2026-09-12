@@ -1,0 +1,105 @@
+# Runway Video Queue (Web + Auto Google Drive)
+
+Web nhỏ để bạn:
+1. Upload 1 file CSV chứa nhiều prompt (+ ảnh nếu muốn dùng image-to-video)
+2. Bấm "Bắt đầu render" rồi đi làm việc khác
+3. Máy tự render từng video qua Runway API, tự tải về, tự đẩy lên Google Drive
+4. Có thể tắt tab/trình duyệt — server vẫn chạy nền trên Railway
+
+## 1. Cấu trúc CSV
+
+| cột | bắt buộc | mô tả |
+|---|---|---|
+| id | có | mã định danh, dùng để đặt tên file video, vd `001` |
+| prompt | có | nội dung prompt |
+| model | không | `gen4.5`, `seedance2_5`, `wan3`... (mặc định `gen4.5`) |
+| duration | không | số giây (mặc định 5) |
+| image | không | tên file ảnh **đã upload cùng lúc**, dùng cho image-to-video |
+
+Xem file mẫu `prompts.example.csv`. Nếu dòng có cột `image` khớp tên 1 ảnh bạn upload, hệ thống tự chuyển sang chế độ image-to-video cho dòng đó.
+
+## 2. Chạy thử ở máy local
+
+```bash
+npm install
+cp .env.example .env
+# điền RUNWAYML_API_SECRET vào .env
+npm start
+```
+
+Mở `http://localhost:3000`.
+
+## 3. Lấy Runway API key
+
+Tạo tại **dev.runwayml.com** (khác với tài khoản web runwayml.com thường dùng). Lưu ý: gói Unlimited trên web KHÔNG tự động thành API không giới hạn — API tính phí theo credit riêng.
+
+## 4. Cấu hình Google Drive tự động upload (tuỳ chọn nhưng bạn cần cái này)
+
+Vì server chạy trên Railway (không có màn hình đăng nhập Google của bạn), cách ổn định nhất là dùng **Service Account**:
+
+1. Vào [Google Cloud Console](https://console.cloud.google.com/) → tạo project mới (hoặc dùng project có sẵn)
+2. Bật **Google Drive API** cho project đó
+3. Vào **IAM & Admin → Service Accounts → Create Service Account**
+4. Sau khi tạo, vào tab **Keys → Add Key → JSON** → tải file JSON về
+5. Mở file JSON đó, copy toàn bộ nội dung, dán làm giá trị biến `GOOGLE_SERVICE_ACCOUNT_JSON` (dán nguyên 1 dòng)
+6. **Quan trọng:** vào Google Drive, tạo 1 folder để chứa video, bấm **Share** folder đó và thêm email của service account (dạng `xxx@xxx.iam.gserviceaccount.com`) với quyền **Editor**
+7. Copy ID của folder (đoạn cuối URL khi mở folder) vào `GOOGLE_DRIVE_FOLDER_ID`
+
+> Lưu ý: Service account có Drive riêng gần như không có dung lượng "My Drive" cá nhân — bắt buộc phải share folder như bước 6, nếu không sẽ báo lỗi quota khi upload.
+
+Nếu bạn không set `GOOGLE_SERVICE_ACCOUNT_JSON`, hệ thống vẫn chạy bình thường, chỉ là video sẽ chỉ lưu local (tải qua nút "Tải video" trên web) chứ không tự đẩy Drive.
+
+## 5. Đẩy lên GitHub
+
+```bash
+git init
+git add .
+git commit -m "init runway video queue"
+git branch -M main
+git remote add origin <link_repo_cua_ban>
+git push -u origin main
+```
+
+`.env` đã được `.gitignore`, sẽ không bị đẩy lên — an toàn.
+
+## 6. Deploy Railway
+
+1. Vào [railway.app](https://railway.app) → **New Project → Deploy from GitHub repo** → chọn repo vừa tạo
+2. Railway tự nhận diện Node.js qua `package.json` (`npm install` + `npm start`)
+3. Vào tab **Variables**, thêm các biến giống `.env.example`:
+   - `RUNWAYML_API_SECRET`
+   - `GOOGLE_SERVICE_ACCOUNT_JSON`
+   - `GOOGLE_DRIVE_FOLDER_ID`
+   - `QUEUE_CONCURRENCY` (vd `2`)
+   - Không cần set `PORT`, Railway tự cấp
+4. Deploy xong, Railway cho bạn 1 domain dạng `xxx.up.railway.app` — mở link đó chính là trang upload
+
+### Lưu ý quan trọng về lưu trữ trên Railway
+
+Railway dùng **ổ đĩa tạm (ephemeral)** — nếu app restart/redeploy, các file trong `downloads/` và `uploads/` (và cả `status.json`) có thể bị xoá. Vì vậy:
+- Video luôn nên được đẩy lên Google Drive ngay khi render xong (đã tự động làm ở bước 4) — đừng dựa vào việc video còn nằm trên Railway lâu dài
+- Nếu cần resume chính xác sau khi Railway restart, nên gắn thêm 1 [Railway Volume](https://docs.railway.app/reference/volumes) mount vào thư mục project để `status.json`/`downloads` không mất — mình có thể hướng dẫn thêm nếu bạn cần
+
+## 7. Các nút điều khiển trên web
+
+- **Pause**: tạm dừng, các job đang chạy sẽ hoàn tất rồi các job tiếp theo chờ
+- **Resume**: chạy tiếp
+- **Stop**: dừng hẳn queue hiện tại
+- Bảng trạng thái tự refresh mỗi 3 giây, hiện `QUEUE → RENDERING → UPLOADING → DONE` (hoặc `FAILED` sau khi thử lại 2 lần)
+
+## 8. Những gì bản này có so với bản MVP ban đầu
+
+- ✅ Web UI upload CSV + nhiều ảnh cùng lúc (kéo/chọn file), không cần sửa code
+- ✅ Hỗ trợ cả text-to-video và image-to-video (tự chọn theo cột `image`)
+- ✅ Tự động upload video lên Google Drive qua Service Account
+- ✅ `status.json` để biết job nào DONE/FAILED, resume không làm lại job đã xong
+- ✅ Concurrency (chạy song song nhiều job), tự retry 2 lần khi lỗi
+- ✅ Nút Pause / Resume / Stop
+- ✅ Sẵn sàng deploy Railway từ GitHup bằng `npm start`
+
+## 9. Có thể thêm sau (nếu bạn cần)
+
+- Railway Volume để không mất dữ liệu khi redeploy
+- Thanh progress bar tổng (x/y hoàn thành) và ước tính credit đã dùng
+- Đặt tên file theo ngày (`christmas_2026-09-12_001.mp4`)
+- Giới hạn upload bằng mật khẩu đơn giản (tránh người lạ vào trang dùng credit của bạn)
