@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Runway Video Queue</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="container">
+    <h1>🎬 Runway Video Queue</h1>
+    <p class="subtitle">Upload CSV prompt (+ ảnh nếu muốn image-to-video) rồi để máy tự chạy. Video xong sẽ tự lưu và đẩy lên Google Drive.</p>
+
+    <div class="card">
+      <form id="uploadForm">
+        <label class="field">
+          <span>File CSV (cột: id, prompt, model, duration, image)</span>
+          <input type="file" id="csvInput" accept=".csv" required />
+        </label>
+
+        <label class="field">
+          <span>Ảnh đầu vào (tuỳ chọn, chọn nhiều — tên file phải khớp cột "image" trong CSV)</span>
+          <input type="file" id="imagesInput" accept="image/*" multiple />
+        </label>
+
+        <button type="submit" id="submitBtn">Bắt đầu render</button>
+      </form>
+      <p id="formMsg"></p>
+    </div>
+
+    <div class="card">
+      <div class="controls">
+        <button id="pauseBtn">⏸ Pause</button>
+        <button id="resumeBtn">▶ Resume</button>
+        <button id="stopBtn">⏹ Stop</button>
+        <span id="queueState"></span>
+      </div>
+
+      <table id="statusTable">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Prompt</th>
+            <th>Trạng thái</th>
+            <th>Video</th>
+            <th>Google Drive</th>
+          </tr>
+        </thead>
+        <tbody id="statusBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
